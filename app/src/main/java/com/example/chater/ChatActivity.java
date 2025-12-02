@@ -26,6 +26,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import android.view.MotionEvent;
+import android.view.inputmethod.InputMethodManager;
+import android.content.Context;
+
+import android.view.ViewTreeObserver;
+import android.graphics.Rect;
+
 public class ChatActivity extends AppCompatActivity {
     public static final String EXTRA_TARGET_ID = "extra_target_id";
     public static final String EXTRA_TARGET_NAME = "extra_target_name";
@@ -33,6 +40,7 @@ public class ChatActivity extends AppCompatActivity {
     private int targetUserId;
     private String targetUserName;
     
+    private View rootLayout;
     private RecyclerView recyclerView;
     private ChatAdapter adapter;
     private EditText etMessage;
@@ -43,6 +51,8 @@ public class ChatActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chat);
+        
+        rootLayout = findViewById(R.id.rootLayout);
 
         targetUserId = getIntent().getIntExtra(EXTRA_TARGET_ID, 1);
         targetUserName = getIntent().getStringExtra(EXTRA_TARGET_NAME);
@@ -70,6 +80,18 @@ public class ChatActivity extends AppCompatActivity {
         recyclerView.setAdapter(adapter);
 
         etMessage = findViewById(R.id.etMessage);
+        
+        // Scroll to bottom when keyboard opens
+        recyclerView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            if (bottom < oldBottom) {
+                recyclerView.postDelayed(() -> {
+                    if (adapter.getItemCount() > 0) {
+                        recyclerView.scrollToPosition(adapter.getItemCount() - 1);
+                    }
+                }, 100);
+            }
+        });
+
         Button btnSend = findViewById(R.id.btnSend);
         btnSend.setOnClickListener(v -> sendMessage());
 
@@ -77,19 +99,110 @@ public class ChatActivity extends AppCompatActivity {
         emojiPanel = findViewById(R.id.emojiPanel);
         btnEmoji.setOnClickListener(v -> {
             if (emojiPanel.getVisibility() == View.VISIBLE) {
+                // Close emoji, open keyboard
                 emojiPanel.setVisibility(View.GONE);
+                showKeyboard();
             } else {
-                emojiPanel.setVisibility(View.VISIBLE);
+                // Open emoji, close keyboard
+                hideKeyboard();
+                // Delay showing emoji panel slightly to allow keyboard to close smoothly
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    emojiPanel.setVisibility(View.VISIBLE);
+                    // Scroll to bottom after panel opens
+                    if (adapter.getItemCount() > 0) {
+                        recyclerView.scrollToPosition(adapter.getItemCount() - 1);
+                    }
+                }, 100);
             }
         });
         
+        etMessage.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                 if (emojiPanel.getVisibility() == View.VISIBLE) {
+                     emojiPanel.setVisibility(View.GONE);
+                 }
+            }
+            return false; // Let system handle focus and keyboard
+        });
+        
         setupEmojiGrid();
+        
+        // Hide keyboard when clicking on recycler view
+        recyclerView.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                hideKeyboard();
+                if (emojiPanel.getVisibility() == View.VISIBLE) {
+                    emojiPanel.setVisibility(View.GONE);
+                }
+            }
+            return false;
+        });
+        
+        controlKeyboardLayout();
+    }
+    
+    private void controlKeyboardLayout() {
+        rootLayout.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+            @Override
+            public void onGlobalLayout() {
+                Rect r = new Rect();
+                rootLayout.getWindowVisibleDisplayFrame(r);
+                
+                int screenHeight = rootLayout.getRootView().getHeight();
+                int keypadHeight = screenHeight - r.bottom;
+                
+                // 0.15 ratio is enough to detect keyboard
+                if (keypadHeight > screenHeight * 0.15) {
+                    // Keyboard is open
+                    // Set padding to bottom to push content up
+                    // Note: If adjustResize is working properly, keypadHeight might be small (system handled)
+                    // But since we set windowSoftInputMode="stateHidden", system might not resize.
+                    // Actually, with stateHidden (or nothing), system might do nothing or adjustPan.
+                    // We want to FORCE resize by padding.
+                    
+                    // Check if we already have padding
+                    if (rootLayout.getPaddingBottom() != keypadHeight) {
+                        rootLayout.setPadding(0, 0, 0, keypadHeight);
+                        // Also scroll to bottom
+                         if (adapter.getItemCount() > 0) {
+                             recyclerView.scrollToPosition(adapter.getItemCount() - 1);
+                         }
+                    }
+                } else {
+                    // Keyboard is closed
+                    if (rootLayout.getPaddingBottom() != 0) {
+                        rootLayout.setPadding(0, 0, 0, 0);
+                    }
+                }
+            }
+        });
+    }
+    
+    private void hideKeyboard() {
+        View view = this.getCurrentFocus();
+        if (view != null) {
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+        }
+        etMessage.clearFocus();
+    }
+    
+    private void showKeyboard() {
+        etMessage.requestFocus();
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        imm.showSoftInput(etMessage, InputMethodManager.SHOW_IMPLICIT);
     }
     
     private void setupEmojiGrid() {
         GridView gridView = findViewById(R.id.emojiGrid);
-        // Simple emoji list
-        String[] emojis = new String[]{"😀", "😂", "😍", "👍", "🎉", "❤️", "😎", "🤔", "😭", "👋"};
+        // Expanded emoji list
+        String[] emojis = new String[]{
+            "😀", "😂", "😍", "👍", "🎉", "❤️", "😎", "🤔", "😭", "👋",
+            "😊", "🤣", "😘", "👏", "🎊", "💔", "🤓", "😐", "😢", "👌",
+            "😁", "😅", "🥰", "🙌", "🎈", "💕", "🧐", "😑", "😤", "🤝",
+            "😆", "😉", "🤩", "🙏", "🎁", "💘", "🤠", "😶", "😡", "✌️",
+            "😅", "😋", "🤗", "💪", "🎂", "💖", "😈", "🙄", "🤬", "🤞"
+        };
         List<Map<String, String>> data = new ArrayList<>();
         for (String e : emojis) {
             Map<String, String> map = new HashMap<>();

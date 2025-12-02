@@ -83,8 +83,11 @@ public class MessageDao {
     public List<Conversation> getConversations() {
         List<Conversation> conversations = new ArrayList<>();
         SQLiteDatabase db = dbHelper.getReadableDatabase();
-        Cursor cursor = db.query(ChatDatabaseHelper.TABLE_CONVERSATIONS, null, null, null, null, null,
-                ChatDatabaseHelper.COL_LAST_TIMESTAMP + " DESC");
+        // Sort by unread (unread > 0) DESC, then timestamp DESC
+        String orderBy = "(CASE WHEN " + ChatDatabaseHelper.COL_UNREAD_COUNT + " > 0 THEN 1 ELSE 0 END) DESC, " + 
+                         ChatDatabaseHelper.COL_LAST_TIMESTAMP + " DESC";
+        
+        Cursor cursor = db.query(ChatDatabaseHelper.TABLE_CONVERSATIONS, null, null, null, null, null, orderBy);
 
         if (cursor.moveToFirst()) {
             do {

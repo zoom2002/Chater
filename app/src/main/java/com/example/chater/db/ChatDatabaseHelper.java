@@ -6,7 +6,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 
 public class ChatDatabaseHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "chater.db";
-    private static final int DATABASE_VERSION = 3;
+    private static final int DATABASE_VERSION = 4;
 
     public static final String TABLE_MESSAGES = "messages";
     public static final String TABLE_CONVERSATIONS = "conversations";
