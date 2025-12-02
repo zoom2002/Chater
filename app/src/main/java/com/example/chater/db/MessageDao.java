@@ -18,7 +18,7 @@ public class MessageDao {
         dbHelper = new ChatDatabaseHelper(context);
     }
 
-    public void insertMessage(Message message) {
+    public void insertMessage(Message message, String userName) {
         SQLiteDatabase db = dbHelper.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put(ChatDatabaseHelper.COL_CONTENT, message.getContent());
@@ -27,10 +27,15 @@ public class MessageDao {
         values.put(ChatDatabaseHelper.COL_CHAT_ID, message.getChatId());
         db.insert(ChatDatabaseHelper.TABLE_MESSAGES, null, values);
         
-        updateConversation(message);
+        updateConversation(message, userName);
     }
 
-    private void updateConversation(Message message) {
+    // Overload for compatibility or internal use
+    public void insertMessage(Message message) {
+        insertMessage(message, "User " + message.getChatId());
+    }
+
+    private void updateConversation(Message message, String userName) {
         SQLiteDatabase db = dbHelper.getWritableDatabase();
         int targetUserId = message.getChatId();
         
@@ -47,11 +52,15 @@ public class MessageDao {
                 int currentUnread = cursor.getInt(cursor.getColumnIndexOrThrow(ChatDatabaseHelper.COL_UNREAD_COUNT));
                 values.put(ChatDatabaseHelper.COL_UNREAD_COUNT, currentUnread + 1);
             }
+            // Update name if provided and not default
+            if (userName != null && !userName.startsWith("User ")) {
+                 values.put(ChatDatabaseHelper.COL_TARGET_USER_NAME, userName);
+            }
             db.update(ChatDatabaseHelper.TABLE_CONVERSATIONS, values,
                     ChatDatabaseHelper.COL_TARGET_USER_ID + "=?", new String[]{String.valueOf(targetUserId)});
         } else {
             values.put(ChatDatabaseHelper.COL_TARGET_USER_ID, targetUserId);
-            values.put(ChatDatabaseHelper.COL_TARGET_USER_NAME, "User " + targetUserId);
+            values.put(ChatDatabaseHelper.COL_TARGET_USER_NAME, userName != null ? userName : "User " + targetUserId);
             values.put(ChatDatabaseHelper.COL_UNREAD_COUNT, message.getSenderId() != Message.SENDER_SELF ? 1 : 0);
             db.insert(ChatDatabaseHelper.TABLE_CONVERSATIONS, null, values);
         }
